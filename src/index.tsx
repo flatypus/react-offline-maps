@@ -5,6 +5,7 @@ import {
   CanvasSize,
   OfflineMapProps,
   Coordinate,
+  MapElement,
 } from './lib/types';
 import { spiral } from './lib/spiral';
 import {
@@ -17,12 +18,14 @@ import {
 } from 'react';
 import * as React from 'react';
 import { ConfigContext, configDefaults } from './ConfigContext';
+import { useDebounce } from './lib/debounce';
 
 const defaultOfflineMapProps: MapProps = {
   latitude: 49.2827,
   longitude: -123.1207,
   zoom: 12,
   mapElements: [],
+  mapLines: [],
 };
 
 const TILE_SIZE = 256;
@@ -31,7 +34,6 @@ const MINIMUM_X = 800;
 const MINIMUM_Y = 600;
 
 const BUFFER = 5;
-
 const COORDINATE_PRECISION = 1e9;
 
 const globalImageCache: Record<string, HTMLImageElement | null> = {};
@@ -78,6 +80,51 @@ function ShowCenter() {
   );
 }
 
+function MapElements({
+  mapElements,
+  canvasSize,
+  coordinate,
+}: {
+  mapElements: MapElement[];
+  canvasSize: CanvasSize;
+  coordinate: Coordinate;
+}) {
+  const { width, height } = canvasSize;
+  const { latitude, longitude, zoom } = coordinate;
+
+  return (
+    <>
+      {mapElements.map((element, index) => {
+        const {
+          latitude: elementLatitude,
+          longitude: elementLongitude,
+          element: reactElement,
+        } = element;
+
+        const elementOSM = LatLngToOSM(elementLatitude, elementLongitude, zoom);
+        const cameraOSM = LatLngToOSM(latitude, longitude, zoom);
+
+        const dx =
+          width / 2 +
+          (elementOSM.float_x_tile - cameraOSM.float_x_tile) * TILE_SIZE;
+        const dy =
+          height / 2 +
+          (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE;
+
+        return (
+          <div
+            key={index}
+            className="absolute translate-x-[-50%] translate-y-[-50%]"
+            style={{ left: dx, top: dy }}
+          >
+            {reactElement}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function Map(props: Partial<OfflineMapProps>) {
   const {
     latitude: initialLatitude,
@@ -97,7 +144,7 @@ function Map(props: Partial<OfflineMapProps>) {
 
   const [latitude, setLatitude] = useState(initialLatitude);
   const [longitude, setLongitude] = useState(initialLongitude);
-  const [zoom, setZoom] = useState(initialZoom);
+  const [zoom, setZoom] = useDebounce(initialZoom, 100);
 
   const config = useContext(ConfigContext);
 
@@ -177,12 +224,12 @@ function Map(props: Partial<OfflineMapProps>) {
       img.src = src;
     };
 
-    Promise.allSettled(
-      spiral(
-        Math.ceil(canvasSize.width / TILE_SIZE) + BUFFER,
-        Math.ceil(canvasSize.height / TILE_SIZE) + BUFFER
-      ).map(cell => drawImage(x_tile + cell[0], y_tile + cell[1]))
-    );
+    for (let cell of spiral(
+      Math.ceil(canvasSize.width / TILE_SIZE) + BUFFER,
+      Math.ceil(canvasSize.height / TILE_SIZE) + BUFFER
+    )) {
+      drawImage(x_tile + cell[0], y_tile + cell[1]);
+    }
   }, [latitude, longitude, zoom, config]);
 
   useEffect(() => {
@@ -191,6 +238,10 @@ function Map(props: Partial<OfflineMapProps>) {
     window.addEventListener('resize', reload);
     return () => window.removeEventListener('resize', reload);
   }, []);
+
+  useEffect(() => {
+    renderMap();
+  }, [zoom]);
 
   return (
     <div
@@ -214,58 +265,31 @@ function Map(props: Partial<OfflineMapProps>) {
           let newLatitude = latitude + dy * coefficient;
           let newLongitude = longitude + dx * -coefficient;
 
-          if (newLatitude > 85) newLatitude = 85;
-          if (newLatitude < -85) newLatitude = -85;
-          if (newLongitude > 180) newLongitude = 180;
-          if (newLongitude < -180) newLongitude = -180;
-
-          setLongitude(newLongitude);
-          setLatitude(newLatitude);
+          setLatitude(Math.max(-85, Math.min(85, newLatitude)));
+          setLongitude(Math.max(-180, Math.min(180, newLongitude)));
           renderMap();
         }}
         onMouseUp={() => (dragStart.current = null)}
         onWheel={e => {
-          wheelStart.current += e.deltaY;
-          const newZoom = Math.round(initialZoom - wheelStart.current / 200);
-
+          const newZoom = Math.round(
+            initialZoom - (wheelStart.current + e.deltaY) / 200
+          );
+          console.log('AAAAA', newZoom);
           if (newZoom < 0 || newZoom > 18) return;
+          wheelStart.current += e.deltaY;
           setZoom(newZoom);
-          renderMap();
         }}
       ></canvas>
-
       <ShowCoordinates latitude={latitude} longitude={longitude} zoom={zoom} />
-
       <ShowCenter />
-
-      {mapElements.map((element, index) => {
-        if (!canvasReference.current) return null;
-        const {
-          latitude: elementLatitude,
-          longitude: elementLongitude,
-          element: reactElement,
-        } = element;
-
-        const elementOSM = LatLngToOSM(elementLatitude, elementLongitude, zoom);
-        const cameraOSM = LatLngToOSM(latitude, longitude, zoom);
-
-        const dx =
-          canvasReference.current.clientWidth / 2 +
-          (elementOSM.float_x_tile - cameraOSM.float_x_tile) * TILE_SIZE;
-        const dy =
-          canvasReference.current.clientHeight / 2 +
-          (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE;
-
-        return (
-          <div
-            key={index}
-            className="absolute translate-x-[-50%] translate-y-[-50%]"
-            style={{ left: dx, top: dy }}
-          >
-            {reactElement}
-          </div>
-        );
-      })}
+      <MapElements
+        canvasSize={{
+          width: canvasReference.current?.clientWidth!,
+          height: canvasReference.current?.clientHeight!,
+        }}
+        coordinate={{ latitude, longitude, zoom }}
+        mapElements={mapElements}
+      />
     </div>
   );
 }

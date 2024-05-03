@@ -4,8 +4,20 @@ export type Coordinate = {
   zoom: number;
 };
 
+export type MapElement = {
+  latitude: number;
+  longitude: number;
+  element: JSX.Element;
+};
+
+export type MapLine = {
+  color?: string;
+  coordinates: [number, number][];
+};
+
 export type MapProps = Coordinate & {
   mapElements: MapElement[];
+  mapLines: MapLine[];
 };
 
 export type Config = Partial<{
@@ -38,9 +50,3 @@ export type OfflineMapProps = Partial<
     config: Config;
   }
 >;
-
-export type MapElement = {
-  latitude: number;
-  longitude: number;
-  element: JSX.Element;
-};

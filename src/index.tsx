@@ -131,6 +131,7 @@ function Map(props: Partial<OfflineMapProps>) {
       longitude,
       zoom
     );
+
     const x_tile = Math.floor(float_x_tile);
     const y_tile = Math.floor(float_y_tile);
 
@@ -144,27 +145,16 @@ function Map(props: Partial<OfflineMapProps>) {
     const drawImage = (x: number, y: number) => {
       if (x < 0 || y < 0) return;
       const src = `${config.mapServer}/${zoom}/${x}/${y}.png`;
-      const dx = (x - x_tile) * TILE_SIZE + canvasSize.width / 2 - offset_x;
-      const dy = (y - y_tile) * TILE_SIZE + canvasSize.height / 2 - offset_y;
+      const dx = canvasSize.width / 2 - offset_x + (x - x_tile) * TILE_SIZE;
+      const dy = canvasSize.height / 2 - offset_y + (y - y_tile) * TILE_SIZE;
 
       const draw = (img: HTMLImageElement) => {
-        context.drawImage(
-          img,
-          dx - TILE_SIZE / 2,
-          dy - TILE_SIZE / 2,
-          TILE_SIZE,
-          TILE_SIZE
-        );
+        context.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE);
 
         if (config.showOSMBorders) {
           context.strokeStyle = '#00000088';
-          context.lineWidth = 1;
-          context.strokeRect(
-            dx - TILE_SIZE / 2,
-            dy - TILE_SIZE / 2,
-            TILE_SIZE,
-            TILE_SIZE
-          );
+          context.lineWidth = 0.5;
+          context.strokeRect(dx, dy, TILE_SIZE, TILE_SIZE);
         }
       };
 
@@ -253,21 +243,18 @@ function Map(props: Partial<OfflineMapProps>) {
         const {
           latitude: elementLatitude,
           longitude: elementLongitude,
-          element: Element,
+          element: reactElement,
         } = element;
 
         const elementOSM = LatLngToOSM(elementLatitude, elementLongitude, zoom);
         const cameraOSM = LatLngToOSM(latitude, longitude, zoom);
 
         const dx =
-          (elementOSM.float_x_tile - cameraOSM.float_x_tile) * TILE_SIZE +
-          canvasReference.current?.width / 2 -
-          TILE_SIZE / 2;
-
+          canvasReference.current.clientWidth / 2 +
+          (elementOSM.float_x_tile - cameraOSM.float_x_tile) * TILE_SIZE;
         const dy =
-          (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE +
-          canvasReference.current?.height / 2 -
-          TILE_SIZE / 2;
+          canvasReference.current.clientHeight / 2 +
+          (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE;
 
         return (
           <div
@@ -275,7 +262,7 @@ function Map(props: Partial<OfflineMapProps>) {
             className="absolute translate-x-[-50%] translate-y-[-50%]"
             style={{ left: dx, top: dy }}
           >
-            {Element}
+            {reactElement}
           </div>
         );
       })}

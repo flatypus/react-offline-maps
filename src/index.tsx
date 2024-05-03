@@ -166,7 +166,9 @@ function OfflineMap(props: Partial<OfflineMapProps>) {
           const dx = e.clientX - dragStart.current.x;
           const dy = e.clientY - dragStart.current.y;
 
-          const coefficient = 0.05 / Math.pow(2, zoom);
+          dragStart.current = { x: e.clientX, y: e.clientY };
+
+          const coefficient = 1 / Math.pow(2, zoom);
 
           let newLatitude = latitude + dy * coefficient;
           let newLongitude = longitude + dx * -coefficient;

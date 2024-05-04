@@ -133,9 +133,11 @@ function Map(props: Partial<OfflineMapProps>) {
     className,
     style,
     mapElements,
+    mapLines,
   } = { ...defaultOfflineMapProps, ...props };
 
   const canvasReference = useRef<HTMLCanvasElement>(null);
+  const mapLinesReference = useRef<HTMLCanvasElement>(null);
   const parentReference = useRef<HTMLDivElement>(null);
   const dragStart = useRef<Position | null>(null);
   const wheelStart = useRef<number>(0);
@@ -149,7 +151,8 @@ function Map(props: Partial<OfflineMapProps>) {
   const config = useContext(ConfigContext);
 
   const reload = () => {
-    if (!canvasReference.current || !parentReference.current) return;
+    if (!parentReference.current) return;
+    if (!canvasReference.current || !mapLinesReference.current) return;
 
     const newClientWidth = parentReference.current?.clientWidth || 0;
     const newClientHeight = parentReference.current?.clientHeight || 0;
@@ -157,8 +160,11 @@ function Map(props: Partial<OfflineMapProps>) {
       width: newClientWidth < MINIMUM_X ? MINIMUM_X : newClientWidth,
       height: newClientHeight < MINIMUM_Y ? MINIMUM_Y : newClientHeight,
     };
+
     canvasReference.current.width = newSize.width;
     canvasReference.current.height = newSize.height;
+    mapLinesReference.current.width = newSize.width;
+    mapLinesReference.current.height = newSize.height;
     renderMap();
   };
 
@@ -184,6 +190,41 @@ function Map(props: Partial<OfflineMapProps>) {
 
     const offset_x = (float_x_tile - x_tile) * TILE_SIZE;
     const offset_y = (float_y_tile - y_tile) * TILE_SIZE;
+
+    const LatLngToPixels = (latitude: number, longitude: number) => {
+      const { float_x_tile, float_y_tile } = LatLngToOSM(
+        latitude,
+        longitude,
+        zoom
+      );
+      const dx =
+        canvasSize.width / 2 - offset_x + (float_x_tile - x_tile) * TILE_SIZE;
+      const dy =
+        canvasSize.height / 2 - offset_y + (float_y_tile - y_tile) * TILE_SIZE;
+      return { dx, dy };
+    };
+
+    const lineContext = mapLinesReference?.current?.getContext('2d');
+    if (lineContext && mapLines?.length) {
+      lineContext.clearRect(0, 0, canvasSize.width, canvasSize.height);
+      for (let line of mapLines) {
+        const { color, coordinates } = line;
+        lineContext.strokeStyle = color || '#000000';
+        lineContext.lineWidth = 2;
+        lineContext.beginPath();
+        for (let lineIndex = 0; lineIndex < coordinates.length; lineIndex++) {
+          const [latitude, longitude] = coordinates[lineIndex];
+          const { dx, dy } = LatLngToPixels(latitude, longitude);
+          if (lineIndex === 0) {
+            lineContext.moveTo(dx, dy);
+          } else {
+            lineContext.lineTo(dx, dy);
+          }
+        }
+        lineContext.closePath();
+        lineContext.stroke();
+      }
+    }
 
     context.clearRect(0, 0, canvasSize.width, canvasSize.height);
     context.fillStyle = '#FFFFFF';
@@ -224,11 +265,11 @@ function Map(props: Partial<OfflineMapProps>) {
       img.src = src;
     };
 
-    for (let cell of spiral(
+    for (let [cell_x, cell_y] of spiral(
       Math.ceil(canvasSize.width / TILE_SIZE) + BUFFER,
       Math.ceil(canvasSize.height / TILE_SIZE) + BUFFER
     )) {
-      drawImage(x_tile + cell[0], y_tile + cell[1]);
+      drawImage(x_tile + cell_x, y_tile + cell_y);
     }
   }, [latitude, longitude, zoom, config]);
 
@@ -250,8 +291,13 @@ function Map(props: Partial<OfflineMapProps>) {
       style={style}
     >
       <canvas
+        className="w-full h-full absolute top-0 left-0"
         ref={canvasReference}
         onResize={reload}
+      ></canvas>
+      <canvas
+        ref={mapLinesReference}
+        className="w-full h-full absolute top-0 left-0 z-10 pointer-events-none"
         onMouseDown={e => (dragStart.current = { x: e.clientX, y: e.clientY })}
         onMouseMove={e => {
           if (!dragStart.current) return;
@@ -274,12 +320,11 @@ function Map(props: Partial<OfflineMapProps>) {
           const newZoom = Math.round(
             initialZoom - (wheelStart.current + e.deltaY) / 200
           );
-          console.log('AAAAA', newZoom);
           if (newZoom < 0 || newZoom > 18) return;
           wheelStart.current += e.deltaY;
           setZoom(newZoom);
         }}
-      ></canvas>
+      />
       <ShowCoordinates latitude={latitude} longitude={longitude} zoom={zoom} />
       <ShowCenter />
       <MapElements

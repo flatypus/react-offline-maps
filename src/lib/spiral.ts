@@ -1,5 +1,5 @@
 export function spiral(width: number, height: number) {
-  const cells: any[] = [];
+  const cells: [number, number][] = [];
   let x = 0,
     y = 0,
     dx = 0,

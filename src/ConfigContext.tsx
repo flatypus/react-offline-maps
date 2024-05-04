@@ -29,6 +29,7 @@ export const configDefaults: Config = {
 
   mapServer: 'https://tile.openstreetmap.org',
   showOSMBorders: false,
+  useOfflineCache: true,
 };
 
 export const ConfigContext = createContext<Config>(configDefaults);

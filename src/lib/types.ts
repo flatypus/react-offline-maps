@@ -31,6 +31,8 @@ export type Config = Partial<{
 
   mapServer: string;
   showOSMBorders: boolean;
+
+  useOfflineCache: boolean;
 }>;
 
 export type CanvasSize = {

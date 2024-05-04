@@ -125,7 +125,7 @@ function MapElements({
   );
 }
 
-function Map(props: Partial<OfflineMapProps>) {
+function MapComponent(props: Partial<OfflineMapProps>) {
   const {
     latitude: initialLatitude,
     longitude: initialLongitude,
@@ -144,8 +144,6 @@ function Map(props: Partial<OfflineMapProps>) {
   const renderingZoom = useRef(initialZoom);
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
-
-  const [velocity, setVelocity] = useState<Position>({ x: 0, y: 0 });
   const [latitude, setLatitude] = useState(initialLatitude);
   const [longitude, setLongitude] = useState(initialLongitude);
   const [zoom, setZoom] = useDebounce(initialZoom, 100);
@@ -233,7 +231,7 @@ function Map(props: Partial<OfflineMapProps>) {
     context.fillStyle = '#FFFFFF';
     context.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
-    const drawImage = (x: number, y: number) => {
+    const drawImage = async (x: number, y: number) => {
       if (x < 0 || y < 0) return;
       const src = `${config.mapServer}/${zoom}/${x}/${y}.png`;
       const dx = canvasSize.width / 2 - offset_x + (x - x_tile) * TILE_SIZE;
@@ -250,23 +248,42 @@ function Map(props: Partial<OfflineMapProps>) {
         }
       };
 
-      const cache = globalImageCache[src];
-      if (cache) {
-        draw(cache);
+      let imageResult = globalImageCache[src];
+      if (imageResult) {
+        draw(imageResult);
         return;
       }
 
+      const cache = await caches.open('offline-map-cache');
+      const result = await cache.match(src);
       const img = new Image();
-      img.onload = () => {
-        draw(img);
-        globalImageCache[src] = img;
-      };
+      img.crossOrigin = 'anonymous';
 
-      img.onerror = () => {
-        globalImageCache[src] = null;
-      };
-
-      img.src = src;
+      if (result) {
+        const blob = await result.blob();
+        const img = new Image();
+        img.onload = () => {
+          draw(img);
+          globalImageCache[src] = img;
+        };
+        img.src = URL.createObjectURL(blob);
+      } else {
+        img.onload = () => {
+          draw(img);
+          globalImageCache[src] = img;
+          if (!config.useOfflineCache) return;
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = TILE_SIZE;
+          tempCanvas.height = TILE_SIZE;
+          const tempContext = tempCanvas.getContext('2d');
+          if (!tempContext) return;
+          tempContext.drawImage(img, 0, 0);
+          tempCanvas.toBlob(async blob => {
+            if (blob) await cache.put(src, new Response(blob));
+          });
+        };
+        img.src = src;
+      }
     };
 
     for (let [cell_x, cell_y] of spiral(
@@ -288,19 +305,6 @@ function Map(props: Partial<OfflineMapProps>) {
     renderMap();
   }, [zoom]);
 
-  useEffect(() => {
-    if (!velocity.x && !velocity.y) return;
-    const coefficient = 1 / Math.pow(2, zoom);
-    const dx = velocity.x * 0.8;
-    const dy = velocity.y * 0.8;
-    let newLatitude = latitude + dy * coefficient;
-    let newLongitude = longitude + dx * -coefficient;
-    setLatitude(Math.max(-85, Math.min(85, newLatitude)));
-    setLongitude(Math.max(-180, Math.min(180, newLongitude)));
-    renderMap();
-    setVelocity({ x: velocity.x * 0.99, y: velocity.y * 0.99 });
-  }, [velocity]);
-
   return (
     <div
       ref={parentReference}
@@ -318,10 +322,19 @@ function Map(props: Partial<OfflineMapProps>) {
         onMouseDown={e => (dragStart.current = { x: e.clientX, y: e.clientY })}
         onMouseMove={e => {
           if (!dragStart.current) return;
-          const vx = e.clientX - dragStart.current.x;
-          const vy = e.clientY - dragStart.current.y;
-          setVelocity({ x: vx, y: vy });
+          const dx = e.clientX - dragStart.current.x;
+          const dy = e.clientY - dragStart.current.y;
+
           dragStart.current = { x: e.clientX, y: e.clientY };
+
+          const coefficient = 1 / Math.pow(2, zoom);
+
+          let newLatitude = latitude + dy * coefficient;
+          let newLongitude = longitude + dx * -coefficient;
+
+          setLatitude(Math.max(-85, Math.min(85, newLatitude)));
+          setLongitude(Math.max(-180, Math.min(180, newLongitude)));
+          renderMap();
         }}
         onMouseUp={() => (dragStart.current = null)}
         onWheel={e => {
@@ -347,13 +360,13 @@ function Map(props: Partial<OfflineMapProps>) {
   );
 }
 
-function OfflineMap(props: Partial<OfflineMapProps>) {
+function Map(props: Partial<OfflineMapProps>) {
   return (
     <ConfigContext.Provider value={{ ...configDefaults, ...props.config }}>
-      <Map {...props} />
+      <MapComponent {...props} />
     </ConfigContext.Provider>
   );
 }
 
-export { OfflineMap };
-export default OfflineMap;
+export { Map };
+export default Map;

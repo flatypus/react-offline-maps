@@ -141,6 +141,7 @@ function Map(props: Partial<OfflineMapProps>) {
   const parentReference = useRef<HTMLDivElement>(null);
   const dragStart = useRef<Position | null>(null);
   const wheelStart = useRef<number>(0);
+  const renderingZoom = useRef(initialZoom);
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
 
@@ -170,6 +171,7 @@ function Map(props: Partial<OfflineMapProps>) {
 
   const renderMap = useCallback(() => {
     if (!canvasReference.current) return;
+    renderingZoom.current = zoom;
 
     const canvasSize: CanvasSize = {
       width: canvasReference.current.width,
@@ -237,6 +239,7 @@ function Map(props: Partial<OfflineMapProps>) {
       const dy = canvasSize.height / 2 - offset_y + (y - y_tile) * TILE_SIZE;
 
       const draw = (img: HTMLImageElement) => {
+        if (renderingZoom.current !== zoom) return;
         context.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE);
 
         if (config.showOSMBorders) {

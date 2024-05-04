@@ -145,6 +145,7 @@ function Map(props: Partial<OfflineMapProps>) {
 
   const [, forceUpdate] = useReducer(x => x + 1, 0);
 
+  const [velocity, setVelocity] = useState<Position>({ x: 0, y: 0 });
   const [latitude, setLatitude] = useState(initialLatitude);
   const [longitude, setLongitude] = useState(initialLongitude);
   const [zoom, setZoom] = useDebounce(initialZoom, 100);
@@ -287,6 +288,19 @@ function Map(props: Partial<OfflineMapProps>) {
     renderMap();
   }, [zoom]);
 
+  useEffect(() => {
+    if (!velocity.x && !velocity.y) return;
+    const coefficient = 1 / Math.pow(2, zoom);
+    const dx = velocity.x * 0.8;
+    const dy = velocity.y * 0.8;
+    let newLatitude = latitude + dy * coefficient;
+    let newLongitude = longitude + dx * -coefficient;
+    setLatitude(Math.max(-85, Math.min(85, newLatitude)));
+    setLongitude(Math.max(-180, Math.min(180, newLongitude)));
+    renderMap();
+    setVelocity({ x: velocity.x * 0.99, y: velocity.y * 0.99 });
+  }, [velocity]);
+
   return (
     <div
       ref={parentReference}
@@ -304,19 +318,10 @@ function Map(props: Partial<OfflineMapProps>) {
         onMouseDown={e => (dragStart.current = { x: e.clientX, y: e.clientY })}
         onMouseMove={e => {
           if (!dragStart.current) return;
-          const dx = e.clientX - dragStart.current.x;
-          const dy = e.clientY - dragStart.current.y;
-
+          const vx = e.clientX - dragStart.current.x;
+          const vy = e.clientY - dragStart.current.y;
+          setVelocity({ x: vx, y: vy });
           dragStart.current = { x: e.clientX, y: e.clientY };
-
-          const coefficient = 1 / Math.pow(2, zoom);
-
-          let newLatitude = latitude + dy * coefficient;
-          let newLongitude = longitude + dx * -coefficient;
-
-          setLatitude(Math.max(-85, Math.min(85, newLatitude)));
-          setLongitude(Math.max(-180, Math.min(180, newLongitude)));
-          renderMap();
         }}
         onMouseUp={() => (dragStart.current = null)}
         onWheel={e => {

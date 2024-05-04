@@ -205,7 +205,7 @@ function Map(props: Partial<OfflineMapProps>) {
     };
 
     const lineContext = mapLinesReference?.current?.getContext('2d');
-    if (lineContext && mapLines?.length) {
+    if (lineContext) {
       lineContext.clearRect(0, 0, canvasSize.width, canvasSize.height);
       for (let line of mapLines) {
         const { color, coordinates } = line;

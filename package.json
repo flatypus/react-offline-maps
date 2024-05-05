@@ -2,12 +2,14 @@
   "name": "react-offline-maps",
   "displayName": "react-offline-maps",
   "description": "A simple offline maps component for React",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [
-    "dist", "LICENSE", "README.md"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "engines": {
     "node": ">=10"
@@ -68,8 +70,14 @@
     "url": "git+https://github.com/flatypus/react-offline-maps.git"
   },
   "keywords": [
-    "react", "typescript", "tailwind",
-    "leaflet", "offline", "cache",
-    "maps", "google maps", "openstreetmap"
+    "react",
+    "typescript",
+    "tailwind",
+    "leaflet",
+    "offline",
+    "cache",
+    "maps",
+    "google maps",
+    "openstreetmap"
   ]
 }

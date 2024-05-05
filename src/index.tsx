@@ -2,7 +2,6 @@ import './tailwind.css';
 import {
   Position,
   MapProps,
-  CanvasSize,
   OfflineMapProps,
   Coordinate,
   MapElement,
@@ -29,10 +28,6 @@ const defaultOfflineMapProps: MapProps = {
 };
 
 const TILE_SIZE = 256;
-
-const MINIMUM_X = 800;
-const MINIMUM_Y = 600;
-
 const BUFFER = 5;
 const COORDINATE_PRECISION = 1e9;
 
@@ -48,11 +43,8 @@ function LatLngToOSM(lat: number, lng: number, zoom: number) {
 }
 
 function ShowCoordinates({ latitude, longitude, zoom }: Coordinate) {
-  const {
-    showCoordinates,
-    showCoordinatesClassName,
-    showCoordinatesStyle,
-  } = useContext(ConfigContext);
+  const { showCoordinates, showCoordinatesClassName, showCoordinatesStyle } =
+    useContext(ConfigContext);
 
   return (
     <>
@@ -68,9 +60,8 @@ function ShowCoordinates({ latitude, longitude, zoom }: Coordinate) {
 }
 
 function ShowCenter() {
-  const { showCenter, showCenterClassName, showCenterStyle } = useContext(
-    ConfigContext
-  );
+  const { showCenter, showCenterClassName, showCenterStyle } =
+    useContext(ConfigContext);
   return (
     <>
       {showCenter && (
@@ -82,14 +73,15 @@ function ShowCenter() {
 
 function MapElements({
   mapElements,
-  canvasSize,
+  canvasReference,
   coordinate,
 }: {
   mapElements: MapElement[];
-  canvasSize: CanvasSize;
+  canvasReference: React.RefObject<HTMLCanvasElement>;
   coordinate: Coordinate;
 }) {
-  const { width, height } = canvasSize;
+  const width = canvasReference.current?.width || 0;
+  const height = canvasReference.current?.height || 0;
   const { latitude, longitude, zoom } = coordinate;
 
   return (
@@ -111,6 +103,8 @@ function MapElements({
           height / 2 +
           (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE;
 
+        if (!dx || !dy) return null;
+        if (dx < 0 || dx > width || dy < 0 || dy > height) return null;
         return (
           <div
             key={index}
@@ -143,9 +137,10 @@ function MapComponent(props: Partial<OfflineMapProps>) {
   const wheelStart = useRef<number>(0);
   const renderingZoom = useRef(initialZoom);
 
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const [latitude, setLatitude] = useState(initialLatitude);
   const [longitude, setLongitude] = useState(initialLongitude);
+  const [grabbing, setGrabbing] = useState(false);
   const [zoom, setZoom] = useDebounce(initialZoom, 100);
 
   const config = useContext(ConfigContext);
@@ -156,15 +151,11 @@ function MapComponent(props: Partial<OfflineMapProps>) {
 
     const newClientWidth = parentReference.current?.clientWidth || 0;
     const newClientHeight = parentReference.current?.clientHeight || 0;
-    const newSize = {
-      width: newClientWidth < MINIMUM_X ? MINIMUM_X : newClientWidth,
-      height: newClientHeight < MINIMUM_Y ? MINIMUM_Y : newClientHeight,
-    };
 
-    canvasReference.current.width = newSize.width;
-    canvasReference.current.height = newSize.height;
-    mapLinesReference.current.width = newSize.width;
-    mapLinesReference.current.height = newSize.height;
+    canvasReference.current.width = newClientWidth;
+    canvasReference.current.height = newClientHeight;
+    mapLinesReference.current.width = newClientWidth;
+    mapLinesReference.current.height = newClientHeight;
     renderMap();
   };
 
@@ -172,10 +163,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     if (!canvasReference.current) return;
     renderingZoom.current = zoom;
 
-    const canvasSize: CanvasSize = {
-      width: canvasReference.current.width,
-      height: canvasReference.current.height,
-    };
+    const { width, height } = canvasReference.current;
 
     const context = canvasReference.current.getContext('2d');
     if (!context) return;
@@ -198,16 +186,14 @@ function MapComponent(props: Partial<OfflineMapProps>) {
         longitude,
         zoom
       );
-      const dx =
-        canvasSize.width / 2 - offset_x + (float_x_tile - x_tile) * TILE_SIZE;
-      const dy =
-        canvasSize.height / 2 - offset_y + (float_y_tile - y_tile) * TILE_SIZE;
+      const dx = width / 2 - offset_x + (float_x_tile - x_tile) * TILE_SIZE;
+      const dy = height / 2 - offset_y + (float_y_tile - y_tile) * TILE_SIZE;
       return { dx, dy };
     };
 
     const lineContext = mapLinesReference?.current?.getContext('2d');
     if (lineContext) {
-      lineContext.clearRect(0, 0, canvasSize.width, canvasSize.height);
+      lineContext.clearRect(0, 0, width, height);
       for (let line of mapLines) {
         const { color, coordinates } = line;
         lineContext.strokeStyle = color || '#000000';
@@ -227,15 +213,15 @@ function MapComponent(props: Partial<OfflineMapProps>) {
       }
     }
 
-    context.clearRect(0, 0, canvasSize.width, canvasSize.height);
+    context.clearRect(0, 0, width, height);
     context.fillStyle = '#FFFFFF';
-    context.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    context.fillRect(0, 0, width, height);
 
     const drawImage = async (x: number, y: number) => {
       if (x < 0 || y < 0) return;
       const src = `${config.mapServer}/${zoom}/${x}/${y}.png`;
-      const dx = canvasSize.width / 2 - offset_x + (x - x_tile) * TILE_SIZE;
-      const dy = canvasSize.height / 2 - offset_y + (y - y_tile) * TILE_SIZE;
+      const dx = width / 2 - offset_x + (x - x_tile) * TILE_SIZE;
+      const dy = height / 2 - offset_y + (y - y_tile) * TILE_SIZE;
 
       const draw = (img: HTMLImageElement) => {
         if (renderingZoom.current !== zoom) return;
@@ -278,7 +264,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
           const tempContext = tempCanvas.getContext('2d');
           if (!tempContext) return;
           tempContext.drawImage(img, 0, 0);
-          tempCanvas.toBlob(async blob => {
+          tempCanvas.toBlob(async (blob) => {
             if (blob) await cache.put(src, new Response(blob));
           });
         };
@@ -287,8 +273,8 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     };
 
     for (let [cell_x, cell_y] of spiral(
-      Math.ceil(canvasSize.width / TILE_SIZE) + BUFFER,
-      Math.ceil(canvasSize.height / TILE_SIZE) + BUFFER
+      Math.ceil(width / TILE_SIZE) + BUFFER,
+      Math.ceil(height / TILE_SIZE) + BUFFER
     )) {
       drawImage(x_tile + cell_x, y_tile + cell_y);
     }
@@ -309,7 +295,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     <div
       ref={parentReference}
       className={`${className} w-full h-full relative overflow-hidden`}
-      style={style}
+      style={{ ...style, cursor: grabbing ? 'move' : 'grab' }}
     >
       <canvas
         className="w-full h-full absolute top-0 left-0"
@@ -318,9 +304,16 @@ function MapComponent(props: Partial<OfflineMapProps>) {
       ></canvas>
       <canvas
         ref={mapLinesReference}
-        className="w-full h-full absolute top-0 left-0 z-10 pointer-events-none"
-        onMouseDown={e => (dragStart.current = { x: e.clientX, y: e.clientY })}
-        onMouseMove={e => {
+        className="w-full h-full absolute top-0 left-0 z-10"
+        onMouseDown={(e) => {
+          dragStart.current = { x: e.clientX, y: e.clientY };
+          setGrabbing(true);
+        }}
+        onMouseUp={() => {
+          dragStart.current = null;
+          setGrabbing(false);
+        }}
+        onMouseMove={(e) => {
           if (!dragStart.current) return;
           const dx = e.clientX - dragStart.current.x;
           const dy = e.clientY - dragStart.current.y;
@@ -336,8 +329,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
           setLongitude(Math.max(-180, Math.min(180, newLongitude)));
           renderMap();
         }}
-        onMouseUp={() => (dragStart.current = null)}
-        onWheel={e => {
+        onWheel={(e) => {
           const newZoom = Math.round(
             initialZoom - (wheelStart.current + e.deltaY) / 200
           );
@@ -349,10 +341,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
       <ShowCoordinates latitude={latitude} longitude={longitude} zoom={zoom} />
       <ShowCenter />
       <MapElements
-        canvasSize={{
-          width: canvasReference.current?.clientWidth!,
-          height: canvasReference.current?.clientHeight!,
-        }}
+        canvasReference={canvasReference}
         coordinate={{ latitude, longitude, zoom }}
         mapElements={mapElements}
       />

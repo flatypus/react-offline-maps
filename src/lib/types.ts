@@ -35,11 +35,6 @@ export type Config = Partial<{
   useOfflineCache: boolean;
 }>;
 
-export type CanvasSize = {
-  width: number;
-  height: number;
-};
-
 export type Position = {
   x: number;
   y: number;

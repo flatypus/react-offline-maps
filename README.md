@@ -1,6 +1,6 @@
 # React Offline Maps
 
-## A simple and tiny () offline maps component for React
+## A simple offline maps component for React
 
 Traditional maps, like [leaflet](https://github.com/Leaflet/Leaflet), require an internet connection to continually pull tile data from map servers. This is a drop-in react component that renders a generic ['slippy map'](https://wiki.openstreetmap.org/wiki/Slippy_map), but with built-in browser caching. 
 

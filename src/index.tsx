@@ -23,6 +23,7 @@ const defaultOfflineMapProps: MapProps = {
   latitude: 49.2827,
   longitude: -123.1207,
   zoom: 12,
+  realZoom: 12,
   mapElements: [],
   mapLines: [],
 };
@@ -39,10 +40,15 @@ function LatLngToOSM(lat: number, lng: number, zoom: number) {
   const y_rad = Math.log(Math.tan(lat_rad) + 1 / Math.cos(lat_rad));
   const float_x_tile = (0.5 + lng / 360) * N;
   const float_y_tile = (N * (1 - y_rad / Math.PI)) / 2;
-  return { float_x_tile, float_y_tile };
+  return [float_x_tile, float_y_tile];
 }
 
-function ShowCoordinates({ latitude, longitude, zoom }: Coordinate) {
+function ShowCoordinates({
+  latitude,
+  longitude,
+  zoom,
+  realZoom,
+}: Coordinate & { realZoom: number }) {
   const { showCoordinates, showCoordinatesClassName, showCoordinatesStyle } =
     useContext(ConfigContext);
 
@@ -52,7 +58,7 @@ function ShowCoordinates({ latitude, longitude, zoom }: Coordinate) {
         <div className={showCoordinatesClassName} style={showCoordinatesStyle}>
           {Math.round(latitude * COORDINATE_PRECISION) / COORDINATE_PRECISION},{' '}
           {Math.round(longitude * COORDINATE_PRECISION) / COORDINATE_PRECISION},{' '}
-          {zoom}
+          {zoom}, {realZoom}
         </div>
       )}
     </>
@@ -82,34 +88,36 @@ function MapElements({
 }) {
   const width = canvasReference.current?.width || 0;
   const height = canvasReference.current?.height || 0;
-  const { latitude, longitude, zoom } = coordinate;
+  const { latitude, longitude, realZoom } = coordinate;
 
   return (
     <>
       {mapElements.map((element, index) => {
         const {
-          latitude: elementLatitude,
-          longitude: elementLongitude,
+          latitude: elemLatitude,
+          longitude: elemLongitude,
           element: reactElement,
         } = element;
 
-        const elementOSM = LatLngToOSM(elementLatitude, elementLongitude, zoom);
-        const cameraOSM = LatLngToOSM(latitude, longitude, zoom);
+        const [elemX, elemY] = LatLngToOSM(
+          elemLatitude,
+          elemLongitude,
+          realZoom
+        );
 
-        const dx =
-          width / 2 +
-          (elementOSM.float_x_tile - cameraOSM.float_x_tile) * TILE_SIZE;
-        const dy =
-          height / 2 +
-          (elementOSM.float_y_tile - cameraOSM.float_y_tile) * TILE_SIZE;
+        const [realX, realY] = LatLngToOSM(latitude, longitude, realZoom);
+
+        const dx = width / 2 + (elemX - realX) * TILE_SIZE;
+        const dy = height / 2 + (elemY - realY) * TILE_SIZE;
 
         if (!dx || !dy) return null;
         if (dx < 0 || dx > width || dy < 0 || dy > height) return null;
+
         return (
           <div
             key={index}
             className="absolute translate-x-[-50%] translate-y-[-50%]"
-            style={{ left: dx, top: dy }}
+            style={{ left: dx, top: dy, transform: 'translate(-50%, -50%)' }}
           >
             {reactElement}
           </div>
@@ -141,6 +149,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
   const [latitude, setLatitude] = useState(initialLatitude);
   const [longitude, setLongitude] = useState(initialLongitude);
   const [grabbing, setGrabbing] = useState(false);
+  const [realZoom, setRealZoom] = useState(initialZoom);
   const [zoom, setZoom] = useDebounce(initialZoom, 100);
 
   const config = useContext(ConfigContext);
@@ -161,18 +170,14 @@ function MapComponent(props: Partial<OfflineMapProps>) {
 
   const renderMap = useCallback(() => {
     if (!canvasReference.current) return;
-    renderingZoom.current = zoom;
+    renderingZoom.current = realZoom;
 
     const { width, height } = canvasReference.current;
 
     const context = canvasReference.current.getContext('2d');
     if (!context) return;
 
-    const { float_x_tile, float_y_tile } = LatLngToOSM(
-      latitude,
-      longitude,
-      zoom
-    );
+    const [float_x_tile, float_y_tile] = LatLngToOSM(latitude, longitude, zoom);
 
     const x_tile = Math.floor(float_x_tile);
     const y_tile = Math.floor(float_y_tile);
@@ -180,11 +185,13 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     const offset_x = (float_x_tile - x_tile) * TILE_SIZE;
     const offset_y = (float_y_tile - y_tile) * TILE_SIZE;
 
+    const scale = Math.pow(2, realZoom - zoom);
+
     const LatLngToPixels = (latitude: number, longitude: number) => {
-      const { float_x_tile, float_y_tile } = LatLngToOSM(
+      const [float_x_tile, float_y_tile] = LatLngToOSM(
         latitude,
         longitude,
-        zoom
+        realZoom
       );
       const dx = width / 2 - offset_x + (float_x_tile - x_tile) * TILE_SIZE;
       const dy = height / 2 - offset_y + (float_y_tile - y_tile) * TILE_SIZE;
@@ -220,12 +227,13 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     const drawImage = async (x: number, y: number) => {
       if (x < 0 || y < 0) return;
       const src = `${config.mapServer}/${zoom}/${x}/${y}.png`;
-      const dx = width / 2 - offset_x + (x - x_tile) * TILE_SIZE;
-      const dy = height / 2 - offset_y + (y - y_tile) * TILE_SIZE;
+
+      const dx = ((x - x_tile) * TILE_SIZE - offset_x) * scale + width / 2;
+      const dy = ((y - y_tile) * TILE_SIZE - offset_y) * scale + height / 2;
 
       const draw = (img: HTMLImageElement) => {
-        if (renderingZoom.current !== zoom) return;
-        context.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE);
+        if (renderingZoom.current !== realZoom) return;
+        context.drawImage(img, dx, dy, TILE_SIZE * scale, TILE_SIZE * scale);
 
         if (config.showOSMBorders) {
           context.strokeStyle = '#00000088';
@@ -278,7 +286,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
     )) {
       drawImage(x_tile + cell_x, y_tile + cell_y);
     }
-  }, [latitude, longitude, zoom, config]);
+  }, [latitude, longitude, zoom, realZoom, config]);
 
   useEffect(() => {
     reload();
@@ -289,7 +297,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
 
   useEffect(() => {
     renderMap();
-  }, [zoom]);
+  }, [realZoom]);
 
   return (
     <div
@@ -330,19 +338,24 @@ function MapComponent(props: Partial<OfflineMapProps>) {
           renderMap();
         }}
         onWheel={(e) => {
-          const newZoom = Math.round(
-            initialZoom - (wheelStart.current + e.deltaY) / 200
-          );
-          if (newZoom < 0 || newZoom > 18) return;
+          const newZoom = initialZoom - (wheelStart.current + e.deltaY) / 200;
+          const flooredZoom = Math.floor(newZoom);
+          if (flooredZoom < 0 || flooredZoom > 18) return;
           wheelStart.current += e.deltaY;
-          setZoom(newZoom);
+          setRealZoom(newZoom);
+          setZoom(flooredZoom);
         }}
       />
-      <ShowCoordinates latitude={latitude} longitude={longitude} zoom={zoom} />
+      <ShowCoordinates
+        latitude={latitude}
+        longitude={longitude}
+        zoom={zoom}
+        realZoom={realZoom}
+      />
       <ShowCenter />
       <MapElements
         canvasReference={canvasReference}
-        coordinate={{ latitude, longitude, zoom }}
+        coordinate={{ latitude, longitude, zoom, realZoom }}
         mapElements={mapElements}
       />
     </div>

@@ -2,6 +2,7 @@ export type Coordinate = {
   latitude: number;
   longitude: number;
   zoom: number;
+  realZoom: number;
 };
 
 export type MapElement = {

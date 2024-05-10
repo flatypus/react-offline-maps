@@ -47,8 +47,7 @@ function ShowCoordinates({
   latitude,
   longitude,
   zoom,
-  realZoom,
-}: Coordinate & { realZoom: number }) {
+}: Omit<Coordinate, 'realZoom'>) {
   const { showCoordinates, showCoordinatesClassName, showCoordinatesStyle } =
     useContext(ConfigContext);
 
@@ -58,7 +57,7 @@ function ShowCoordinates({
         <div className={showCoordinatesClassName} style={showCoordinatesStyle}>
           {Math.round(latitude * COORDINATE_PRECISION) / COORDINATE_PRECISION},{' '}
           {Math.round(longitude * COORDINATE_PRECISION) / COORDINATE_PRECISION},{' '}
-          {zoom}, {realZoom}
+          {zoom}
         </div>
       )}
     </>
@@ -214,7 +213,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
             lineContext.lineTo(dx, dy);
           }
         }
-        lineContext.closePath();
+        // lineContext.closePath();
         lineContext.stroke();
       }
     }
@@ -345,12 +344,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
           setZoom(flooredZoom);
         }}
       />
-      <ShowCoordinates
-        latitude={latitude}
-        longitude={longitude}
-        zoom={zoom}
-        realZoom={realZoom}
-      />
+      <ShowCoordinates latitude={latitude} longitude={longitude} zoom={zoom} />
       <ShowCenter />
       <MapElements
         canvasReference={canvasReference}

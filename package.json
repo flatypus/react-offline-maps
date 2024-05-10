@@ -2,7 +2,7 @@
   "name": "react-offline-maps",
   "displayName": "react-offline-maps",
   "description": "A simple offline maps component for React",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",

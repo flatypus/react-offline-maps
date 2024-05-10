@@ -187,17 +187,6 @@ function MapComponent(props: Partial<OfflineMapProps>) {
 
     const scale = Math.pow(2, realZoom - zoom);
 
-    const LatLngToPixels = (latitude: number, longitude: number) => {
-      const [float_x_tile, float_y_tile] = LatLngToOSM(
-        latitude,
-        longitude,
-        realZoom
-      );
-      const dx = width / 2 - offset_x + (float_x_tile - x_tile) * TILE_SIZE;
-      const dy = height / 2 - offset_y + (float_y_tile - y_tile) * TILE_SIZE;
-      return { dx, dy };
-    };
-
     const lineContext = mapLinesReference?.current?.getContext('2d');
     if (lineContext) {
       lineContext.clearRect(0, 0, width, height);
@@ -207,8 +196,18 @@ function MapComponent(props: Partial<OfflineMapProps>) {
         lineContext.lineWidth = 2;
         lineContext.beginPath();
         for (let lineIndex = 0; lineIndex < coordinates.length; lineIndex++) {
-          const [latitude, longitude] = coordinates[lineIndex];
-          const { dx, dy } = LatLngToPixels(latitude, longitude);
+          const [pointLatitude, pointLongitude] = coordinates[lineIndex];
+          const [pointX, pointY] = LatLngToOSM(
+            pointLatitude,
+            pointLongitude,
+            realZoom
+          );
+
+          const [realX, realY] = LatLngToOSM(latitude, longitude, realZoom);
+
+          const dx = width / 2 + (pointX - realX) * TILE_SIZE;
+          const dy = height / 2 + (pointY - realY) * TILE_SIZE;
+
           if (lineIndex === 0) {
             lineContext.moveTo(dx, dy);
           } else {
@@ -238,7 +237,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
         if (config.showOSMBorders) {
           context.strokeStyle = '#00000088';
           context.lineWidth = 0.5;
-          context.strokeRect(dx, dy, TILE_SIZE, TILE_SIZE);
+          context.strokeRect(dx, dy, TILE_SIZE * scale, TILE_SIZE * scale);
         }
       };
 

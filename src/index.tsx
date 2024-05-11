@@ -295,7 +295,7 @@ function MapComponent(props: Partial<OfflineMapProps>) {
 
   useEffect(() => {
     renderMap();
-  }, [realZoom]);
+  }, [realZoom, mapLines]);
 
   return (
     <div
